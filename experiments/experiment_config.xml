@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+
+<experiment_config>
+    <simulation seed="123" duration="600" timestep="0.1" headless="false"/>
+    <robots number="20" distribution="random" min_distance="1.0" placement_seed="42" csv=""/>
+    <arena size_x="20" size_y="20"/>
+    <channel mode="ADVANCED_SNR" range="50" noise="0.05" neighbor_timeout="2.0" routing_timeout="3.0"/>
+    <localization algorithm="BAYESIAN"/>
+    <mac protocol="CSMA" aloha_probability="0.7" csma_backoff="0.2" csma_random_window="0.2"/>
+    <mobility>
+        <current strength="0.0" factor="0.1"/>
+        <drag x="-0.05" y="-0.08"/>
+        <imu_noise sigma="0.02"/>
+    </mobility>
+</experiment_config>

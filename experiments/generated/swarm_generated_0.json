@@ -1,0 +1,27 @@
+{
+    "simulation": {
+        "seed": 123,
+        "duration": 600.0,
+        "headless": false
+    },
+    "robots": {
+        "number": 20,
+        "distribution": "random",
+        "min_distance": 1.0,
+        "placement_seed": 42
+    },
+    "arena": {
+        "size_x": 20.0,
+        "size_y": 20.0
+    },
+    "channel": {
+        "mode": "ADVANCED_SNR",
+        "range": 50.0
+    },
+    "localization": {
+        "algorithm": "EKF"
+    },
+    "mac": {
+        "protocol": "ALOHA"
+    }
+}

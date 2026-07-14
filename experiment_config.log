@@ -1,0 +1,6 @@
+seed=123
+duration=600
+channel=ADVANCED_SNR
+range=1
+mac=CSMA
+localization=BAYESIAN

@@ -1,0 +1,47 @@
+<?xml version='1.0' encoding='utf-8'?>
+<argos-configuration>
+
+  <framework>
+    <system threads="1" />
+    <experiment length="600" ticks_per_second="10" random_seed="123" />
+  </framework>
+
+  <arena size="5,5,1" center="0,0,0.5">
+  <foot-bot id="fb_0"><body position="-8.953,-8.256,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_1"><body position="-1.855,-7.846,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_2"><body position="8.024,-9.237,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_3"><body position="0.724,-3.356,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_4"><body position="7.042,-6.807,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_5"><body position="-3.256,-3.324,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_6"><body position="-5.097,-9.967,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_7"><body position="1.952,-8.602,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_8"><body position="-3.691,-1.034,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_9"><body position="8.108,-8.145,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_10"><body position="-7.156,5.801,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_11"><body position="-9.575,8.223,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_12"><body position="1.468,-4.694,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_13"><body position="6.757,5.376,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_14"><body position="-3.131,6.030,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_15"><body position="-5.863,2.178,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_16"><body position="0.541,6.187,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_17"><body position="-3.695,-2.035,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_18"><body position="5.386,0.255,0" /><controller config="ctrl" /></foot-bot><foot-bot id="fb_19"><body position="3.697,2.767,0" /><controller config="ctrl" /></foot-bot></arena>
+
+  <physics_engines>
+    <dynamics2d id="dyn2d" />
+  </physics_engines>
+
+  <media />
+
+  <controllers>
+    <lua_controller id="ctrl">
+      <actuators>
+        <differential_steering implementation="default" />
+      </actuators>
+      <sensors>
+        <footbot_proximity implementation="default" />
+        <positioning implementation="default" />
+      </sensors>
+      <params script="agent/controller/underwater_agent.lua" />
+    </lua_controller>
+  </controllers>
+
+  <loop_functions library="build/libswarm_loopfunctions.so" label="swarm_loopfunctions" channel_mode="ADVANCED_SNR" localization_mode="BAYESIAN" headless="false" mac_protocol="CSMA">
+    <experiment_config>
+        <simulation seed="123" duration="600" timestep="0.1" headless="true" />
+        <robots number="10" distribution="random" min_distance="1.0" />
+        <channel mode="ADVANCED_SNR" range="1" noise="0.05" attenuation="0.05" speed_sound="1500.0" />
+        <localization algorithm="BAYESIAN" />
+        <mac protocol="CSMA" />
+    </experiment_config>
+</loop_functions>
+
+  <visualization enabled="true">
+    <qt-opengl fullscreen="false" autoplay="true" />
+  </visualization>
+
+  <experiment channel_mode="UNDERWATER_EXTREME" />
+
+</argos-configuration>
