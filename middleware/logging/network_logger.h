@@ -2,13 +2,17 @@
 
 #include <fstream>
 #include <string>
+
 #include "../../core/communication/packet.h"
 #include "log_record.h"
 
 class NetworkLogger {
 public:
-    void Init(const std::string& path) {
+    void Init(
+        const std::string& path)
+    {
         m_log.open(path);
+
         if(m_log.is_open()) {
             m_log
                 << "timestamp,"
@@ -30,71 +34,123 @@ public:
         }
     }
 
-    void LogTx(double t,const Packet& p,double dist,double delay=0.0,double snr=0.0,const std::string& localization_mode = "unknown",const std::string& channel_mode = "unknown"){
-        if(!m_log.is_open())return;
+    void LogTx(
+        double time,
+        const Packet& packet,
+        double distance,
+        double delay = 0.0,
+        double snr = 0.0,
+        const std::string& localization_mode =
+            "unknown",
+        const std::string& channel_mode =
+            "unknown",
+        double metric1 = 0.0,
+        double metric2 = 0.0,
+        double metric3 = 0.0)
+    {
+        if(!m_log.is_open()) {
+            return;
+        }
+
         m_log
-            << t << ","
+            << time << ","
             << "TX,"
-            << p.sender << ","
-            << p.receiver << ","
-            << p.est_x << ","
-            << p.est_y << ","
-            << dist << ","
+            << packet.sender << ","
+            << packet.receiver << ","
+            << packet.est_x << ","
+            << packet.est_y << ","
+            << distance << ","
             << delay << ","
             << snr << ","
             << localization_mode << ","
             << channel_mode << ","
             << "none,"
-            << 0 << ","
-            << 0 << ","
-            << 0
+            << metric1 << ","
+            << metric2 << ","
+            << metric3
             << "\n";
     }
 
-void LogDrop(double t,const Packet& p,const std::string& reason,double dist = 0.0,double delay = 0.0,double snr = 0.0,const std::string& localization_mode = "unknown",const std::string& channel_mode = "unknown"){
-        if(!m_log.is_open())
+    void LogDrop(
+        double time,
+        const Packet& packet,
+        const std::string& reason,
+        double distance = 0.0,
+        double delay = 0.0,
+        double snr = 0.0,
+        const std::string& localization_mode =
+            "unknown",
+        const std::string& channel_mode =
+            "unknown",
+        double metric1 = 0.0,
+        double metric2 = 0.0,
+        double metric3 = 0.0)
+    {
+        if(!m_log.is_open()) {
             return;
+        }
+
         m_log
-            << t << ","
+            << time << ","
             << "DROP,"
-            << p.sender << ","
-            << p.receiver << ","
-            << p.est_x << ","
-            << p.est_y << ","
-            << dist << ","
+            << packet.sender << ","
+            << packet.receiver << ","
+            << packet.est_x << ","
+            << packet.est_y << ","
+            << distance << ","
             << delay << ","
             << snr << ","
             << localization_mode << ","
             << channel_mode << ","
             << reason << ","
-            << 0 << ","
-            << 0 << ","
-            << 0
+            << metric1 << ","
+            << metric2 << ","
+            << metric3
             << "\n";
     }
 
+    void LogRx(
+        double time,
+        const Packet& packet,
+        double distance = 0.0,
+        double delay = 0.0,
+        double snr = 0.0,
+        const std::string& localization_mode =
+            "unknown",
+        const std::string& channel_mode =
+            "unknown",
+        double metric1 = 0.0,
+        double metric2 = 0.0,
+        double metric3 = 0.0)
+    {
+        if(!m_log.is_open()) {
+            return;
+        }
 
- void LogRx(double t,const Packet& p,double dist = 0.0,double delay = 0.0,double snr = 0.0,const std::string& localization_mode = "unknown",const std::string& channel_mode = "unknown"){
-        if(!m_log.is_open()) return;
         m_log
-            << t << ","
+            << time << ","
             << "RX,"
-            << p.sender << ","
-            << p.receiver << ","
-            << p.est_x << ","
-            << p.est_y << ","
-            << dist << ","
+            << packet.sender << ","
+            << packet.receiver << ","
+            << packet.est_x << ","
+            << packet.est_y << ","
+            << distance << ","
             << delay << ","
             << snr << ","
             << localization_mode << ","
             << channel_mode << ","
             << "none,"
-            << 0 << ","
-            << 0 << ","
-            << 0
+            << metric1 << ","
+            << metric2 << ","
+            << metric3
             << "\n";
-}
+    }
 
+    void Flush() {
+        if(m_log.is_open()) {
+            m_log.flush();
+        }
+    }
 
 private:
     std::ofstream m_log;

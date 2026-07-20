@@ -38,6 +38,7 @@ extern MACLayer g_mac_layer;
 extern AcousticChannel g_channel;
 extern EKFDistributed g_ekf;
 extern LocalizationMode g_localization_mode;
+extern LocalizationStack g_localization_stack;
 
 extern bool g_headless_mode;
 extern bool g_log_network;

@@ -118,6 +118,8 @@ class ArgosGenerator:
         self.configure_loop_functions(root)
         arena = root.find("arena")
         if arena is None: raise RuntimeError("Arena node not found")
+        arena.set("size",f"{self.arena_x},{self.arena_y},1")
+        arena.set("center","0,0,0.5")
         positions = self.generate_positions()
 
         for old_robot in arena.findall("foot-bot"):arena.remove(old_robot)
@@ -150,12 +152,62 @@ class ArgosGenerator:
 
     def configure_loop_functions(self, root):
         loop = root.find("loop_functions")
-        if loop is None:
-            raise RuntimeError("loop_functions node not found")
-        loop.set("channel_mode",self.channel_mode)
-        loop.set("localization_mode",self.localization_algorithm)
-        loop.set("headless",str(self.headless).lower())
-        loop.set("mac_protocol",self.mac_protocol)
+        if loop is None: raise RuntimeError("loop_functions node not found")
+        cfg = self.cfg
+
+        # Keep legacy loop-function attributes synchronized.
+        loop.set("channel_mode",cfg["channel_mode"])
+        loop.set("localization_mode",cfg["localization_algorithm"])
+        loop.set("headless",str(cfg["headless"]).lower())
+        loop.set("mac_protocol",cfg["mac_protocol"])
+        experiment = loop.find("experiment_config")
+        if experiment is None: experiment = ET.SubElement(loop,"experiment_config")
+
+        def get_or_create(parent, tag):
+            child = parent.find(tag)
+
+            if child is None:
+                child = ET.SubElement(
+                    parent,
+                    tag)
+
+            return child
+        simulation = get_or_create(experiment,"simulation")
+        simulation.set("seed",str(cfg["seed"]))
+        simulation.set("duration",str(cfg["duration"]))
+        simulation.set("timestep",str(cfg["timestep"]))
+        simulation.set("headless",str(cfg["headless"]).lower())
+        robots = get_or_create(experiment,"robots")
+        robots.set("number",str(cfg["num_robots"]))
+        robots.set("distribution",cfg["distribution"])
+        robots.set("min_distance",str(cfg["min_distance"]))
+        robots.set("placement_seed",str(cfg["placement_seed"]))
+        robots.set("csv",cfg["csv"])
+        channel = get_or_create(experiment,"channel")
+        channel.set("mode",cfg["channel_mode"])
+        channel.set("range",str(cfg["channel_range"]))
+        channel.set("noise",str(cfg["channel_noise"]))
+        channel.set("attenuation",str(cfg["channel_attenuation"]))
+        channel.set("speed_sound",str(cfg["speed_sound"]))
+        channel.set("neighbor_timeout",str(cfg["neighbor_timeout"]))
+        channel.set("routing_timeout",str(cfg["routing_timeout"]))
+        localization = get_or_create(experiment,"localization")
+        localization.set("algorithm",cfg["localization_algorithm"])
+        mac = get_or_create(experiment,"mac")
+        mac.set("protocol",cfg["mac_protocol"])
+        mac.set("aloha_probability",str(cfg["aloha_probability"]))
+        mac.set("csma_backoff",str(cfg["csma_backoff"]))
+        mac.set("csma_random_window",str(cfg["csma_random_window"]))
+        mobility = get_or_create(experiment,"mobility")
+        current = get_or_create(mobility,"current")
+        current.set("strength",str(cfg["current_strength"]))
+        current.set("factor",str(cfg["current_factor"]))
+        drag = get_or_create(mobility,"drag")
+        drag.set("x",str(cfg["drag_x"]))
+        drag.set("y",str(cfg["drag_y"]))
+        imu_noise = get_or_create(mobility,"imu_noise")
+        imu_noise.set("sigma",str(cfg["imu_noise"]))
+
     def get_incremental_filename(self):
         path = self.output_file
         if not path.exists(): return path
@@ -165,65 +217,298 @@ class ArgosGenerator:
             if not new_path.exists() : return new_path
             counter += 1
 
-    def write_json(self, cfg, index):
-        json_file = self.output_file.with_suffix(".json")
+    def write_json(self, cfg, index):json_file = self.output_file.with_suffix(".json")
+
         experiment = {
-            "simulation":{
+            "simulation": {
                 "seed": cfg["seed"],
-                "duration": cfg.get("duration",600),
-                "headless": cfg.get("headless",False)
+                "duration": cfg["duration"],
+                "timestep": cfg["timestep"],
+                "headless": cfg["headless"]
             },
-            "robots":{
+            "robots": {
                 "number": cfg["num_robots"],
                 "distribution": cfg["distribution"],
                 "min_distance": cfg["min_distance"],
-                "placement_seed": cfg.get("placement_seed",cfg["seed"])
+                "placement_seed":
+                    cfg["placement_seed"],
+                "csv": cfg["csv"]
             },
-            "arena":{
+            "arena": {
                 "size_x": cfg["arena_x"],
                 "size_y": cfg["arena_y"]
             },
-            "channel":{
-                "mode": cfg.get("channel_mode","REALISTIC"),
-                "range": cfg["channel_range"]
+            "channel": {
+                "mode": cfg["channel_mode"],
+                "range": cfg["channel_range"],
+                "noise": cfg["channel_noise"],
+                "attenuation":
+                    cfg["channel_attenuation"],
+                "speed_sound": cfg["speed_sound"],
+                "neighbor_timeout":
+                    cfg["neighbor_timeout"],
+                "routing_timeout":
+                    cfg["routing_timeout"]
             },
-            "localization":{
-                "algorithm":cfg.get("localization","EKF")
+            "localization": {
+                "algorithm":
+                    cfg["localization_algorithm"]
             },
-            "mac":{
-                "protocol":cfg.get("mac","ALOHA")
+            "mac": {
+                "protocol": cfg["mac_protocol"],
+                "aloha_probability":
+                    cfg["aloha_probability"],
+                "csma_backoff":
+                    cfg["csma_backoff"],
+                "csma_random_window":
+                    cfg["csma_random_window"]
+            },
+            "mobility": {
+                "current_strength":
+                    cfg["current_strength"],
+                "current_factor":
+                    cfg["current_factor"],
+                "drag_x": cfg["drag_x"],
+                "drag_y": cfg["drag_y"],
+                "imu_noise": cfg["imu_noise"]
             }
         }
-        with open(json_file,"w") as f: json.dump(experiment,f,indent=4)
+        with open(json_file, "w") as file:json.dump(experiment,file,indent=4)
 
 def load_experiment_config(filename):
     tree = ET.parse(filename)
     root = tree.getroot()
+
     simulation = root.find("simulation")
     robots = root.find("robots")
     arena = root.find("arena")
     channel = root.find("channel")
     localization = root.find("localization")
+    mac = root.find("mac")
+    mobility = root.find("mobility")
+
+    required = {
+        "simulation": simulation,
+        "robots": robots,
+        "arena": arena,
+        "channel": channel,
+        "localization": localization,
+        "mac": mac
+    }
+
+    for name, node in required.items():
+        if node is None:
+            raise RuntimeError(
+                f"Missing <{name}> in {filename}")
 
     config = {}
-    config["seed"] = int(simulation.attrib.get("seed",1))
-    config["num_robots"] = int(robots.attrib.get("number",10))
-    config["min_distance"] = float(robots.attrib.get("min_distance",1.0))
-    config["arena_x"] = float(arena.attrib.get("size_x",5))
-    config["arena_y"] = float(arena.attrib.get("size_y",5))
-    config["channel_range"]= float(channel.attrib.get("range",50))
-    config["distribution"] = robots.attrib.get("distribution","random")
-    config["placement_seed"] = int(robots.attrib.get("placement_seed",config["seed"]))
-    config["csv"] = robots.attrib.get("csv","")
-    config["duration"] = float(simulation.attrib.get("duration",600))
-    config["timestep"] = float(simulation.attrib.get("timestep",0.1))
-    config["headless"] = simulation.attrib.get("headless","false").lower() == "true"
-    config["seed"] = int(simulation.attrib.get("seed",1))
-    config["channel_mode"] = channel.attrib.get("mode","REALISTIC")
-    config["localization_algorithm"] = localization.attrib.get("algorithm","EKF")
-    config["mac_protocol"] = root.find("mac").attrib.get("protocol","ALOHA")
-    return config
 
+    config["seed"] = int(
+        simulation.attrib.get(
+            "seed",
+            1))
+
+    config["duration"] = float(
+        simulation.attrib.get(
+            "duration",
+            600))
+
+    config["timestep"] = float(
+        simulation.attrib.get(
+            "timestep",
+            0.1))
+
+    config["headless"] = (
+        simulation.attrib
+        .get("headless", "false")
+        .lower() == "true"
+    )
+
+    config["num_robots"] = int(
+        robots.attrib.get(
+            "number",
+            10))
+
+    config["min_distance"] = float(
+        robots.attrib.get(
+            "min_distance",
+            1.0))
+
+    config["distribution"] = (
+        robots.attrib.get(
+            "distribution",
+            "random")
+    )
+
+    config["placement_seed"] = int(
+        robots.attrib.get(
+            "placement_seed",
+            config["seed"]))
+
+    config["csv"] = robots.attrib.get(
+        "csv",
+        "")
+
+    config["arena_x"] = float(
+        arena.attrib.get(
+            "size_x",
+            5.0))
+
+    config["arena_y"] = float(
+        arena.attrib.get(
+            "size_y",
+            5.0))
+
+    config["channel_mode"] = (
+        channel.attrib
+        .get("mode", "REALISTIC")
+        .upper()
+    )
+
+    config["channel_range"] = float(
+        channel.attrib.get(
+            "range",
+            50.0))
+
+    config["channel_noise"] = float(
+        channel.attrib.get(
+            "noise",
+            0.0))
+
+    config["channel_attenuation"] = float(
+        channel.attrib.get(
+            "attenuation",
+            0.05))
+
+    config["speed_sound"] = float(
+        channel.attrib.get(
+            "speed_sound",
+            1500.0))
+
+    config["neighbor_timeout"] = float(
+        channel.attrib.get(
+            "neighbor_timeout",
+            2.0))
+
+    config["routing_timeout"] = float(
+        channel.attrib.get(
+            "routing_timeout",
+            3.0))
+
+    config["localization_algorithm"] = (
+        localization.attrib
+        .get("algorithm", "NOISY")
+        .upper()
+    )
+
+    config["mac_protocol"] = (
+        mac.attrib
+        .get("protocol", "CSMA")
+        .upper()
+    )
+
+    config["aloha_probability"] = float(
+        mac.attrib.get(
+            "aloha_probability",
+            0.7))
+
+    config["csma_backoff"] = float(
+        mac.attrib.get(
+            "csma_backoff",
+            0.2))
+
+    config["csma_random_window"] = float(
+        mac.attrib.get(
+            "csma_random_window",
+            0.2))
+
+    current = (
+        mobility.find("current")
+        if mobility is not None
+        else None
+    )
+
+    drag = (
+        mobility.find("drag")
+        if mobility is not None
+        else None
+    )
+
+    imu_noise = (
+        mobility.find("imu_noise")
+        if mobility is not None
+        else None
+    )
+
+    config["current_strength"] = float(
+        current.attrib.get("strength", 0.0)
+        if current is not None
+        else 0.0)
+
+    config["current_factor"] = float(
+        current.attrib.get("factor", 0.1)
+        if current is not None
+        else 0.1)
+
+    config["drag_x"] = float(
+        drag.attrib.get("x", -0.05)
+        if drag is not None
+        else -0.05)
+
+    config["drag_y"] = float(
+        drag.attrib.get("y", -0.08)
+        if drag is not None
+        else -0.08)
+
+    config["imu_noise"] = float(
+        imu_noise.attrib.get("sigma", 0.02)
+        if imu_noise is not None
+        else 0.02)
+
+    if config["duration"] <= 0.0:
+        raise RuntimeError(
+            "duration must be greater than zero")
+
+    if config["timestep"] <= 0.0:
+        raise RuntimeError(
+            "timestep must be greater than zero")
+
+    if config["num_robots"] <= 0:
+        raise RuntimeError(
+            "number of robots must be greater than zero")
+
+    if config["channel_range"] <= 0.0:
+        raise RuntimeError(
+            "channel range must be greater than zero")
+
+    if (
+        config["channel_range"] <=
+        config["min_distance"]
+    ):
+        print(
+            "[CONFIG WARNING] Channel range is not "
+            "greater than robot min_distance; "
+            "neighbor discovery may return no links.")
+
+    allowed_localization = {
+        "IDEAL",
+        "NOISY",
+        "NONE",
+        "EKF",
+        "EKF_CI"
+        "CONSENSUS",
+        "PARTICLE_FILTER",
+        "BAYESIAN",
+        "FACTOR_GRAPH"
+    }
+
+    if (config["localization_algorithm"]not in allowed_localization): raise RuntimeError("Unsupported localization algorithm: "f"{config['localization_algorithm']}")
+
+    if config["mac_protocol"] == "TDMA":
+        print("[CONFIG WARNING] TDMA is not implemented; " "using CSMA.")
+        config["mac_protocol"] = "CSMA"
+    if config["mac_protocol"] not in {"ALOHA","CSMA"}:raise RuntimeError("Unsupported MAC protocol: "f"{config['mac_protocol']}")
+    return config
 if __name__ == "__main__":
     cfg = load_experiment_config("../../experiments/experiment_config.xml")
     generator = ArgosGenerator(

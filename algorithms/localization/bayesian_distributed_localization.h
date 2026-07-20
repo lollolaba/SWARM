@@ -17,13 +17,11 @@ public:
 
     void Init(double initial_variance = 1.0);
     //motion model
-    void Predict(const std::string& id,
-                 double motion_dx,
-                 double motion_dy,
-                 double motion_noise = 0.01);
+    void Predict(const std::string& id,double motion_dx,double motion_dy,double motion_noise = 0.01);
 
     // range based
     void Update(const std::string& id,const std::string& neighbor_id,double range,double measurment_noise);
+    void UpdateFromNeighborEstimate(const std::string& id,double neighbor_x,double neighbor_y,double range,double measurement_variance);
 
     void ConsensusUpdate(const std::string& id, const std::vector<std::string>& neighbors, double alpha = 0.5);
 

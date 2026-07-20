@@ -1,5 +1,7 @@
 #include "bayesian_distributed_localization.h"
 #include <cmath>
+#include <algorithm>
+
 void BayesianDistributedLocalization::Init(double init_var) {
     m_beliefs.clear();
     m_initial_variance = init_var;
@@ -81,4 +83,24 @@ void BayesianDistributedLocalization::PredictAndUpdateSelf(
     b.x = x;
     b.y = y;
     b.variance += motion_noise + (dx*dx + dy*dy);
+}
+
+void BayesianDistributedLocalization::UpdateFromNeighborEstimate(const std::string& id,double neighbor_x,double neighbor_y,double range,double measurement_variance){
+    auto& belief = m_beliefs[id];
+    const double dx = neighbor_x - belief.x;
+    const double dy = neighbor_y - belief.y;
+    const double predicted_range = std::sqrt(dx * dx + dy * dy);
+    if(predicted_range < 1e-6) return;
+
+    const double innovation = range - predicted_range;
+
+    const double safe_variance = std::max(measurement_variance, 1e-9);
+
+    const double gain = belief.variance / (belief.variance + safe_variance);
+
+    belief.x -= gain * innovation * (dx / predicted_range);
+
+    belief.y -= gain * innovation * (dy / predicted_range);
+
+    belief.variance *= (1.0 - gain);
 }

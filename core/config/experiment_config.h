@@ -52,23 +52,49 @@ struct ExperimentConfig{
         imu_noise(0.02)
         {}
     };
-    struct Channel{
+    struct Channel {
         std::string mode;
+
         double range;
         double noise;
         double attenuation;
         double speed_sound;
+
         double neighbor_timeout;
         double routing_timeout;
+
+        // Physical THORP channel parameters
+        double frequency_khz;
+        double bitrate_bps;
+        double spreading_factor;
+
+        double source_level_db;
+        double ambient_noise_db;
+
+        double snr_threshold_db;
+        double snr_transition_db;
+        double fading_sigma_db;
+
+        unsigned int packet_overhead_bytes;
+
         Channel()
         :
         mode("DEFAULT"),
         range(50.0),
         noise(0.0),
         attenuation(0.05),
+        speed_sound(1500.0),
         neighbor_timeout(2.0),
         routing_timeout(3.0),
-        speed_sound(1500.0)
+        frequency_khz(25.0),
+        bitrate_bps(1000.0),
+        spreading_factor(1.5),
+        source_level_db(150.0),
+        ambient_noise_db(90.0),
+        snr_threshold_db(10.0),
+        snr_transition_db(2.0),
+        fading_sigma_db(1.5),
+        packet_overhead_bytes(32)
         {}
     };
     struct Localization{

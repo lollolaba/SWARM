@@ -18,6 +18,7 @@ public:
     std::vector<Packet>& GetOutbox();
     std::vector<Packet>& GetInbox(const std::string& id);
     void ClearOutbox();
+    void ClearInboxes();
 
 private:
     std::vector<Packet> m_outbox;

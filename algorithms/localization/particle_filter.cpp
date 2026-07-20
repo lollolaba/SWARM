@@ -1,94 +1,136 @@
 #include "particle_filter.h"
+
 #include <cmath>
 #include <cstdlib>
 #include <algorithm>
 #include <string>
 
-void ParticleFilterLocalization::Init(int num_particles){
-    // optional global init hook (kept simple)
+void ParticleFilterLocalization::Init(int num_particles) {
+    // Optional global initialization hook.
 }
 
-//NORMALIZE WEIGHTS
-void ParticleFilterLocalization::Normalize(std::vector<Particle>& ps){
+void ParticleFilterLocalization::Normalize(std::vector<Particle>& particles){
+    if(particles.empty()) return;
     double sum = 0.0;
-    for (auto& p : ps) sum += p.w;
-    if (sum < 1e-9) return;
-    for (auto& p : ps) p.w /= sum;
-}
 
-// SIMPLE RESAMPLING (systematic-ish)
-void ParticleFilterLocalization::Resample(std::vector<Particle>& ps){
-    std::vector<Particle> new_ps;
-    new_ps.reserve(ps.size());
-
-    double step = 1.0 / ps.size();
-    double r = ((double)rand() / RAND_MAX) * step;
-    if (ps.empty()) return;
-    double c = ps[0].w;
-    int i = 0;
-
-    for (int m = 0; m < ps.size(); m++) {
-        double U = r + m * step;
-        while (U > c && i < ps.size() - 1) {
-            i++;
-            c += ps[i].w;
-        }
-        Particle p = ps[i];
-
-        // jitter (motion model noise)
-        p.x += ((rand() % 100) / 500.0) - 0.1;
-        p.y += ((rand() % 100) / 500.0) - 0.1;
-        p.w = 1.0 / ps.size();
-        new_ps.push_back(p);
+    for(const auto& particle : particles) {
+        sum += particle.w;
     }
-    ps = new_ps;
+
+    if(sum < 1e-12) {
+        const double uniform_weight = 1.0 / particles.size();
+
+        for(auto& particle : particles) {
+            particle.w = uniform_weight;
+        }
+        return;
+    }
+
+    for(auto& particle : particles) {
+        particle.w /= sum;
+    }
 }
 
-//UPDATE STEP
-PositionEstimate ParticleFilterLocalization::Update(const std::string& id,double x,double y,double /*t*/)
-{
-    auto& ps = m_particles[id];
-    if (ps.empty()) {
-        for (int i = 0; i < 20; i++) {
-            ps.push_back({
-                x + ((rand() % 100) / 500.0),
-                y + ((rand() % 100) / 500.0),
+void ParticleFilterLocalization::Resample(std::vector<Particle>& particles){
+    if(particles.empty()) return;
+
+    std::vector<Particle> new_particles;
+    new_particles.reserve(particles.size());
+    const double step = 1.0 / particles.size();
+    const double random_start = (static_cast<double>(rand()) / RAND_MAX) * step;
+
+    double cumulative_weight = particles[0].w;
+    std::size_t particle_index = 0;
+
+    for(std::size_t sample_index = 0;sample_index < particles.size();++sample_index){
+        const double target = random_start + sample_index * step;
+
+        while( target > cumulative_weight && particle_index < particles.size() - 1){
+            ++particle_index;
+            cumulative_weight += particles[particle_index].w;
+        }
+        Particle particle = particles[particle_index];
+
+        // Existing particle-motion jitter.
+        particle.x += ((rand() % 100) / 500.0) - 0.1;
+        particle.y += ((rand() % 100) / 500.0) - 0.1;
+        particle.w = 1.0 / particles.size();
+        new_particles.push_back(particle);
+    }
+    particles = new_particles;
+}
+
+PositionEstimate ParticleFilterLocalization::Update(const std::string& id,double measured_x,double measured_y,double t){
+    auto& particles = m_particles[id];
+
+    if(particles.empty()) {
+        for(int i = 0; i < 20; ++i) {
+            particles.push_back({
+                measured_x + ((rand() % 100) / 500.0),
+                measured_y + ((rand() % 100) / 500.0),
                 1.0
             });
         }
     }
 
-    // measurement update (likelihood)
-    double sigma = 0.5;
-    for (auto& p : ps) {
-        double dx = x - p.x;
-        double dy = y - p.y;
-        double dist2 = dx*dx + dy*dy;
-        // Gaussian likelihood
-        p.w = std::exp(-dist2 / (2 * sigma * sigma));
-    }
-    Normalize(ps);
-    Resample(ps);
+    const double local_sigma = 0.5;
+    const auto observations_it = m_range_observations.find(id);
+    const bool has_range_observations = observations_it != m_range_observations.end() && !observations_it->second.empty();
 
-    //estimate
-    double sx = 0.0, sy = 0.0;
-    double sw = 0.0;
-    for (auto& p : ps) {
-        sx += p.x;
-        sy += p.y;
-        sw += 1.0;
+    for(auto& particle : particles) {
+        const double local_dx = measured_x - particle.x;
+        const double local_dy = measured_y - particle.y;
+        const double local_distance_squared = local_dx * local_dx + local_dy * local_dy;
+
+        double log_weight = -local_distance_squared / (2.0 * local_sigma * local_sigma);
+
+        if(has_range_observations) {
+            for(const auto& observation : observations_it->second){
+                const double range_dx = particle.x - observation.neighbor_x;
+                const double range_dy = particle.y - observation.neighbor_y;
+                const double predicted_range = std::sqrt(range_dx * range_dx + range_dy * range_dy);
+
+                const double residual = observation.measured_range -predicted_range;
+
+                const double variance = std::max(observation.measurement_variance,1e-9);
+
+                log_weight += -(residual * residual) / (2.0 * variance);
+            }
+        }
+
+        particle.w = std::exp(std::max(log_weight, -700.0));
     }
-    return {sx / sw, sy / sw, 1.0};
+
+    Normalize(particles);
+    Resample(particles);
+
+    double sum_x = 0.0;
+    double sum_y = 0.0;
+    double count = 0.0;
+
+    for(const auto& particle : particles) {
+        sum_x += particle.x;
+        sum_y += particle.y;
+        count += 1.0;
+    }
+
+    return {
+        sum_x / count,
+        sum_y / count,
+        1.0
+    };
 }
 
-//NEIGHBORS (placeholder hook for swarm coupling)
 void ParticleFilterLocalization::SetNeighbors(const std::string& id,const std::vector<std::string>& neighbors){
     m_neighbors[id] = neighbors;
 }
-
-const std::vector<std::string>& ParticleFilterLocalization::GetNeighbors(const std::string& id) const {
-    static std::vector<std::string> empty;
-    auto it = m_neighbors.find(id);
+const std::vector<std::string>& ParticleFilterLocalization::GetNeighbors(const std::string& id) const{
+    static const std::vector<std::string> empty;
+    const auto it = m_neighbors.find(id);
     if(it == m_neighbors.end()) return empty;
     return it->second;
+}
+
+void ParticleFilterLocalization::SetRangeObservations(const std::string& id,const std::vector<RangeObservation>& observations){
+    m_range_observations[id] = observations;
 }

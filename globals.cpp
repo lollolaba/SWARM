@@ -28,6 +28,7 @@ NetworkManager g_network_manager;
 MACLayer g_mac_layer;
 EKFDistributed g_ekf;
 LocalizationMode g_localization_mode =LocalizationMode::EKF;
+LocalizationStack g_localization_stack;
 bool g_headless_mode=false;
 bool g_log_network=false;
 double g_acoustic_bitrate=1000;

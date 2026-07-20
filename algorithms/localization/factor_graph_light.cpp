@@ -56,3 +56,7 @@ void FactorGraphLight::ClearEdges() {
 std::unordered_map<std::string, FGNode>& FactorGraphLight::GetNodes() {
     return m_nodes;
 }
+
+void FactorGraphLight::SetNeighbors(const std::string&, const std::vector<std::string>&){
+    
+}

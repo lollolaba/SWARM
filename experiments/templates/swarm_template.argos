@@ -16,16 +16,11 @@
   <media />
 
   <controllers>
-    <lua_controller id="ctrl">
-      <actuators>
-        <differential_steering implementation="default"/>
-      </actuators>
-      <sensors>
-        <footbot_proximity implementation="default"/>
-        <positioning implementation="default"/>
-      </sensors>
-      <params script="agent/controller/underwater_agent.lua"/>
-    </lua_controller>
+    <underwater_agent_controller id="ctrl" library="build/libswarm_loopfunctions.so">
+    <actuators />
+    <sensors />
+    <params broadcast_period_ticks="10"/>
+    </underwater_agent_controller>
   </controllers>
 
   <loop_functions 
@@ -34,7 +29,7 @@
     <experiment_config>
         <simulation seed="123" duration="600" timestep="0.1" headless="true"/>
         <robots number="10" distribution="random" min_distance="1.0"/>
-        <channel mode="ADVANCED_SNR" range="1" noise="0.05" attenuation="0.05" speed_sound="1500.0"/>
+        <channel mode="ADVANCED_SNR" range="50" noise="0.05" attenuation="0.05" speed_sound="1500.0"/>
         <localization algorithm="BAYESIAN"/>
         <mac protocol="CSMA"/>
     </experiment_config>

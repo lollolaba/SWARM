@@ -1,62 +1,59 @@
 #include "scheduler.h"
 #include "../../globals.h"
-#include "../messaging/message_bus.h"
-
-#include "../events/event_bus.h"
 #include "../events/event.h"
-#include "../../environment/channel/acoustic_channel.h"
 
-extern MessageBus g_message_bus;
-
-void Scheduler::Schedule(const ScheduledPacket& p) {
-    m_queue.push_back(p);
+void Scheduler::Schedule(const ScheduledPacket& packet){
+    m_queue.push_back(packet);
 }
 
-std::vector<Packet> Scheduler::GetPacketsAtTime(double sim_time) {
-    std::vector<Packet> out;
+std::vector<Packet>
+Scheduler::GetPacketsAtTime(double sim_time){
+    std::vector<Packet> packets;
     auto it = m_queue.begin();
+
     while(it != m_queue.end()) {
         if(it->delivery_time <= sim_time) {
-            out.push_back(it->packet);
+            packets.push_back(it->packet);
             it = m_queue.erase(it);
-        } else {
+        }
+        else ++it;
+    }
+    return packets;
+}
+
+void Scheduler::Step(double sim_time,EventBus& bus){
+    auto it = m_queue.begin();
+    while(it != m_queue.end()) {
+        if(it->delivery_time > sim_time) {
             ++it;
+            continue;
         }
-    }
-    return out;
-}
+        const ScheduledPacket delivered = *it;
+        // Make the received packet available to the robot.
+        g_message_bus.DeliverToInbox(delivered.packet.receiver,delivered.packet);
 
-
-void Scheduler::Step(double sim_time, EventBus& bus) {
-    auto delivered = GetPacketsAtTime(sim_time);
-    for(const auto& p : delivered) {
-        Event rx;
+        Event rx{};
         rx.time = sim_time;
+        rx.timestamp = delivered.timestamp;
         rx.type = EventType::RX;
-        rx.packet = p;
-        rx.sender = p.sender;
-        rx.receiver = p.receiver;
-        for(const auto& scheduled : m_queue) {
 
+        rx.packet = delivered.packet;
+        rx.sender = delivered.packet.sender;
+        rx.receiver =delivered.packet.receiver;
+        rx.distance = delivered.distance;
+        rx.delay = delivered.delay;
+        rx.snr = delivered.snr;
+        rx.channel_mode =delivered.channel_mode;
+        rx.localization_mode = delivered.localization_mode;
+        rx.reason = delivered.drop_reason;
 
-            if(scheduled.packet.sender == p.sender && scheduled.packet.receiver == p.receiver) {
-                rx.distance =scheduled.distance;
-                rx.delay =scheduled.delay;
-                rx.snr =scheduled.snr;
-                rx.channel_mode =scheduled.channel_mode;
-                rx.localization_mode =scheduled.localization_mode;
-                rx.reason =scheduled.drop_reason;
-                rx.timestamp =scheduled.timestamp;
-                rx.metric1 =scheduled.metric1;
-                rx.metric2 =scheduled.metric2;
-                rx.metric3 =scheduled.metric3;
-                break;
-            }
-        }
+        rx.metric1 = delivered.metric1;
+        rx.metric2 = delivered.metric2;
+        rx.metric3 = delivered.metric3;
         bus.Push(rx);
+        it = m_queue.erase(it);
     }
 }
-
 void Scheduler::Clear() {
     m_queue.clear();
-}  
+}

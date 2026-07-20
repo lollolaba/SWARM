@@ -21,6 +21,7 @@ public:
     void SetALOHAProbability(double p);
     void SetCSMABackoff(double b);
     void SetCSMARandomWindow(double w);
+    void Reset();
 private:
     double m_aloha_probability = 0.7;
     double m_csma_backoff = 0.2;

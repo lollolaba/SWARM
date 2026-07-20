@@ -1,64 +1,204 @@
 #include "localization_stack.h"
-#include <cmath>
 
-void LocalizationStack::SetMode(LocalizationMode m) {
-    m_mode = m;
+void LocalizationStack::SetMode(
+    LocalizationMode mode)
+{
+    m_mode = mode;
 }
 
 void LocalizationStack::SetNeighbors(
     const std::string& id,
     const std::vector<std::string>& neighbors)
 {
-    m_consensus.SetNeighbors(id, neighbors);
-    m_pf.SetNeighbors(id, neighbors);
-    m_fg.SetNeighbors(id, neighbors);
+    m_consensus.SetNeighbors(
+        id,
+        neighbors);
+
+    m_pf.SetNeighbors(
+        id,
+        neighbors);
+
+    m_fg.SetNeighbors(
+        id,
+        neighbors);
+}
+
+void LocalizationStack::SetRangeObservations(
+    const std::string& id,
+    const std::vector<RangeObservation>& observations)
+{
+    m_range_observations[id] =
+        observations;
+
+    m_pf.SetRangeObservations(
+        id,
+        observations);
 }
 
 PositionEstimate LocalizationStack::Update(
     const std::string& id,
-    double x,
-    double y,
-    double t)
+    double true_x,
+    double true_y,
+    double /*t*/)
 {
-    PositionEstimate out;
+    return Update(
+        id,
+        true_x,
+        true_y,
+        true_x,
+        true_y,
+        0.1);
+}
 
-    switch(m_mode) {
+PositionEstimate
+LocalizationStack::UpdateCooperativeEKF(
+    EKFDistributed& filter,
+    EKFRangeFusionMode fusion_mode,
+    const std::string& id,
+    double measured_x,
+    double measured_y,
+    double dt)
+{
+    // Existing prediction and local-position update.
+    filter.Update(
+        id,
+        measured_x,
+        measured_y,
+        dt);
 
-        case LocalizationMode::IDEAL:
-            return {x, y, 0.0};
+    const auto observations_it =
+        m_range_observations.find(id);
 
-        case LocalizationMode::NOISY:
-            return {x + 0.02, y + 0.02, 0.1};
-
-        case LocalizationMode::EKF:
-            return m_ekf.Update(id, x, y, t);
-
-        case LocalizationMode::CONSENSUS:
-            return m_consensus.Update(id, x, y, t);
-
-        case LocalizationMode::PARTICLE_FILTER:
-            return m_pf.Update(id, x, y, t);
-
-        case LocalizationMode::BAYESIAN: {
-            // 1. self update
-            m_bayes.PredictAndUpdateSelf(id, x, y, 0.01);
-            // 2. get neighbors correctly
-            const auto& neighbours = m_pf.GetNeighbors(id);
-            for (const auto& n_id : neighbours) {
-                const auto& nb = m_bayes.Get(n_id);
-                const auto& me = m_bayes.Get(id);
-                double dx = nb.x - me.x;
-                double dy = nb.y - me.y;
-                double range = std::sqrt(dx*dx + dy*dy);
-                if (range < 1e-6) continue;
-                m_bayes.Update(id, n_id, range, 0.05);
-            }
-            const auto& est = m_bayes.Get(id);
-            return {est.x, est.y, est.variance};
+    if(observations_it !=
+       m_range_observations.end())
+    {
+        for(const auto& observation :
+            observations_it->second)
+        {
+            filter.UpdateFromRange(
+                id,
+                observation.neighbor_x,
+                observation.neighbor_y,
+                observation.measured_range,
+                observation.measurement_variance,
+                observation.neighbor_position_variance,
+                fusion_mode);
         }
-        case LocalizationMode::FACTOR_GRAPH:
-            return m_fg.Update(id, x, y, t);
     }
 
-    return {x, y, 0.1};
+    const auto& state =
+        filter.GetState(id);
+
+    return {
+        state.x,
+        state.y,
+        state.P[0][0] +
+        state.P[1][1]
+    };
+}
+
+PositionEstimate LocalizationStack::Update(
+    const std::string& id,
+    double true_x,
+    double true_y,
+    double measured_x,
+    double measured_y,
+    double dt)
+{
+    switch(m_mode) {
+        case LocalizationMode::IDEAL:
+            return {
+                true_x,
+                true_y,
+                0.0
+            };
+
+        case LocalizationMode::NOISY:
+            return {
+                measured_x,
+                measured_y,
+                0.1
+            };
+
+        case LocalizationMode::EKF:
+            return UpdateCooperativeEKF(
+                m_ekf,
+                EKFRangeFusionMode::STANDARD,
+                id,
+                measured_x,
+                measured_y,
+                dt);
+
+        case LocalizationMode::EKF_CI:
+            return UpdateCooperativeEKF(
+                m_ekf_ci,
+                EKFRangeFusionMode::
+                    COVARIANCE_INTERSECTION,
+                id,
+                measured_x,
+                measured_y,
+                dt);
+
+        case LocalizationMode::CONSENSUS:
+            return m_consensus.Update(
+                id,
+                measured_x,
+                measured_y,
+                dt);
+
+        case LocalizationMode::PARTICLE_FILTER:
+            return m_pf.Update(
+                id,
+                measured_x,
+                measured_y,
+                dt);
+
+        case LocalizationMode::BAYESIAN: {
+            m_bayes.PredictAndUpdateSelf(
+                id,
+                measured_x,
+                measured_y,
+                0.01);
+
+            const auto observations_it =
+                m_range_observations.find(id);
+
+            if(observations_it !=
+               m_range_observations.end())
+            {
+                for(const auto& observation :
+                    observations_it->second)
+                {
+                    m_bayes.UpdateFromNeighborEstimate(
+                        id,
+                        observation.neighbor_x,
+                        observation.neighbor_y,
+                        observation.measured_range,
+                        observation.measurement_variance);
+                }
+            }
+
+            const auto& estimate =
+                m_bayes.Get(id);
+
+            return {
+                estimate.x,
+                estimate.y,
+                estimate.variance
+            };
+        }
+
+        case LocalizationMode::FACTOR_GRAPH:
+            return m_fg.Update(
+                id,
+                measured_x,
+                measured_y,
+                dt);
+    }
+
+    return {
+        measured_x,
+        measured_y,
+        0.1
+    };
 }

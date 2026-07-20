@@ -22,3 +22,7 @@ std::vector<Packet>& MessageBus::GetOutbox() {
 void MessageBus::ClearOutbox() {
     m_outbox.clear();
 }
+
+void MessageBus::ClearInboxes(){
+    m_inboxes.clear();
+}

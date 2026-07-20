@@ -25,6 +25,8 @@ private:
     static void LoadMAC(ExperimentConfig& config,argos::TConfigurationNode& node);
 
     static void LoadMobility(ExperimentConfig& config,argos::TConfigurationNode& node);
+
+    static void Validate(ExperimentConfig& config);
 };
 
 

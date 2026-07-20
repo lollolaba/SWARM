@@ -45,3 +45,7 @@ void MACLayer::SetCSMABackoff(double b){
 void MACLayer::SetCSMARandomWindow(double w){
     m_csma_random_window = w;
 }
+
+void MACLayer::Reset(){
+    m_last_tx_time.clear();
+}
