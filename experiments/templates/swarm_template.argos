@@ -29,9 +29,9 @@
     <experiment_config>
         <simulation seed="123" duration="600" timestep="0.1" headless="true"/>
         <robots number="10" distribution="random" min_distance="1.0"/>
-        <channel mode="ADVANCED_SNR" range="50" noise="0.05" attenuation="0.05" speed_sound="1500.0"/>
+        <channel mode="ADVANCED_SNR" range="50" noise="0.05" attenuation="0.05" speed_sound="1500.0" frequency_khz="25.0" bitrate_bps="1000.0" spreading_factor="1.5" source_level_db="150.0" ambient_noise_db="90.0" snr_threshold_db="10.0" snr_transition_db="2.0" fading_sigma_db="1.5" packet_overhead_bytes="32"/>
         <localization algorithm="BAYESIAN"/>
-        <mac protocol="CSMA"/>
+        <mac protocol="TDMA" aloha_probability="0.7" csma_backoff="0.2" csma_random_window="0.2" tdma_guard_interval="0.0" tdma_payload_bytes="0"/>
     </experiment_config>
 </loop_functions>
 

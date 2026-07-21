@@ -189,6 +189,15 @@ class ArgosGenerator:
         channel.set("noise",str(cfg["channel_noise"]))
         channel.set("attenuation",str(cfg["channel_attenuation"]))
         channel.set("speed_sound",str(cfg["speed_sound"]))
+        channel.set("frequency_khz",str(cfg["frequency_khz"]))
+        channel.set("bitrate_bps",str(cfg["bitrate_bps"]))
+        channel.set("spreading_factor",str(cfg["spreading_factor"]))
+        channel.set("source_level_db",str(cfg["source_level_db"]))
+        channel.set("ambient_noise_db",str(cfg["ambient_noise_db"]))
+        channel.set("snr_threshold_db",str(cfg["snr_threshold_db"]))
+        channel.set("snr_transition_db",str(cfg["snr_transition_db"]))
+        channel.set("fading_sigma_db",str(cfg["fading_sigma_db"]))
+        channel.set("packet_overhead_bytes",str(cfg["packet_overhead_bytes"]))
         channel.set("neighbor_timeout",str(cfg["neighbor_timeout"]))
         channel.set("routing_timeout",str(cfg["routing_timeout"]))
         localization = get_or_create(experiment,"localization")
@@ -198,6 +207,8 @@ class ArgosGenerator:
         mac.set("aloha_probability",str(cfg["aloha_probability"]))
         mac.set("csma_backoff",str(cfg["csma_backoff"]))
         mac.set("csma_random_window",str(cfg["csma_random_window"]))
+        mac.set("tdma_guard_interval",str(cfg["tdma_guard_interval"]))
+        mac.set("tdma_payload_bytes",str(cfg["tdma_payload_bytes"]))
         mobility = get_or_create(experiment,"mobility")
         current = get_or_create(mobility,"current")
         current.set("strength",str(cfg["current_strength"]))
@@ -242,13 +253,19 @@ class ArgosGenerator:
                 "mode": cfg["channel_mode"],
                 "range": cfg["channel_range"],
                 "noise": cfg["channel_noise"],
-                "attenuation":
-                    cfg["channel_attenuation"],
+                "attenuation": cfg["channel_attenuation"],
                 "speed_sound": cfg["speed_sound"],
-                "neighbor_timeout":
-                    cfg["neighbor_timeout"],
-                "routing_timeout":
-                    cfg["routing_timeout"]
+                "frequency_khz": cfg["frequency_khz"],
+                "bitrate_bps": cfg["bitrate_bps"],
+                "spreading_factor": cfg["spreading_factor"],
+                "source_level_db": cfg["source_level_db"],
+                "ambient_noise_db": cfg["ambient_noise_db"],
+                "snr_threshold_db": cfg["snr_threshold_db"],
+                "snr_transition_db": cfg["snr_transition_db"],
+                "fading_sigma_db": cfg["fading_sigma_db"],
+                "packet_overhead_bytes": cfg["packet_overhead_bytes"],
+                "neighbor_timeout": cfg["neighbor_timeout"],
+                "routing_timeout": cfg["routing_timeout"]
             },
             "localization": {
                 "algorithm":
@@ -262,6 +279,10 @@ class ArgosGenerator:
                     cfg["csma_backoff"],
                 "csma_random_window":
                     cfg["csma_random_window"]
+                "tdma_guard_interval":
+                    cfg["tdma_guard_interval"],
+                "tdma_payload_bytes":
+                    cfg["tdma_payload_bytes"]
             },
             "mobility": {
                 "current_strength":
@@ -384,6 +405,50 @@ def load_experiment_config(filename):
         channel.attrib.get(
             "speed_sound",
             1500.0))
+    config["frequency_khz"] = float(
+        channel.attrib.get(
+            "frequency_khz",
+            25.0))
+
+    config["bitrate_bps"] = float(
+        channel.attrib.get(
+            "bitrate_bps",
+            1000.0))
+
+    config["spreading_factor"] = float(
+        channel.attrib.get(
+            "spreading_factor",
+            1.5))
+
+    config["source_level_db"] = float(
+        channel.attrib.get(
+            "source_level_db",
+            150.0))
+
+    config["ambient_noise_db"] = float(
+        channel.attrib.get(
+            "ambient_noise_db",
+            90.0))
+
+    config["snr_threshold_db"] = float(
+        channel.attrib.get(
+            "snr_threshold_db",
+            10.0))
+
+    config["snr_transition_db"] = float(
+        channel.attrib.get(
+            "snr_transition_db",
+            2.0))
+
+    config["fading_sigma_db"] = float(
+        channel.attrib.get(
+            "fading_sigma_db",
+            1.5))
+
+    config["packet_overhead_bytes"] = int(
+        channel.attrib.get(
+            "packet_overhead_bytes",
+            32))
 
     config["neighbor_timeout"] = float(
         channel.attrib.get(
@@ -421,6 +486,15 @@ def load_experiment_config(filename):
         mac.attrib.get(
             "csma_random_window",
             0.2))
+    config["tdma_guard_interval"] = float(
+        mac.attrib.get(
+            "tdma_guard_interval",
+            0.0))
+
+    config["tdma_payload_bytes"] = int(
+        mac.attrib.get(
+            "tdma_payload_bytes",
+            0))
 
     current = (
         mobility.find("current")
@@ -504,11 +578,35 @@ def load_experiment_config(filename):
 
     if (config["localization_algorithm"]not in allowed_localization): raise RuntimeError("Unsupported localization algorithm: "f"{config['localization_algorithm']}")
 
-    if config["mac_protocol"] == "TDMA":
-        print("[CONFIG WARNING] TDMA is not implemented; " "using CSMA.")
-        config["mac_protocol"] = "CSMA"
-    if config["mac_protocol"] not in {"ALOHA","CSMA"}:raise RuntimeError("Unsupported MAC protocol: "f"{config['mac_protocol']}")
+    allowed_channels = {
+        "BASIC",
+        "REALISTIC",
+        "ADVANCED_SNR",
+        "UNDERWATER_EXTREME",
+        "THORP"
+    }
+
+    if config["channel_mode"] not in allowed_channels:
+        raise RuntimeError(
+            "Unsupported channel mode: "
+            f"{config['channel_mode']}")
+
+
+    if config["mac_protocol"] not in {"ALOHA","CSMA","TDMA"}:raise RuntimeError("Unsupported MAC protocol: "f"{config['mac_protocol']}")
+    if config["tdma_guard_interval"] < 0.0: raise RuntimeError("tdma_guard_interval cannot be negative")
+    if config["tdma_payload_bytes"] < 0: raise RuntimeError("tdma_payload_bytes cannot be negative")
+    
+    if config["frequency_khz"] <= 0.0: raise RuntimeError("frequency_khz must be greater than zero")
+
+    if config["bitrate_bps"] <= 0.0:raise RuntimeError("bitrate_bps must be greater than zero")
+
+    if not 1.0 <= config["spreading_factor"] <= 2.0: raise RuntimeError("spreading_factor must be between 1.0 and 2.0")
+
+    if config["snr_transition_db"] <= 0.0: raise RuntimeError("snr_transition_db must be greater than zero")
+
+    if config["fading_sigma_db"] < 0.0: raise RuntimeError("fading_sigma_db cannot be negative")
     return config
+
 if __name__ == "__main__":
     cfg = load_experiment_config("../../experiments/experiment_config.xml")
     generator = ArgosGenerator(

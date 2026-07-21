@@ -104,19 +104,26 @@ struct ExperimentConfig{
         algorithm("NONE")
         {}
     };
-    struct MAC{
+
+    struct MAC {
         std::string protocol;
         double aloha_probability;
         double csma_backoff;
         double csma_random_window;
-        MAC()
-        :
+        // Minimum requested TDMA guard interval. A value of 0 enables automatic computation: channel range / speed of sound.
+        double tdma_guard_interval;
+        // Maximum expected packet payload. The acoustic-channel packet overhead is added separately when computing slot duration.
+        unsigned int tdma_payload_bytes;
+        MAC():
         protocol("ALOHA"),
         aloha_probability(0.7),
         csma_backoff(0.2),
-        csma_random_window(0.2)
+        csma_random_window(0.2),
+        tdma_guard_interval(0.0),
+        tdma_payload_bytes(0)
         {}
     };
+
     Simulation simulation;
     Robots robots;
     Mobility mobility;

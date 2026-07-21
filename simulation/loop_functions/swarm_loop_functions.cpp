@@ -23,21 +23,12 @@ void CSwarmLoopFunctions::Init(argos::TConfigurationNode& t_node) {
     m_config.ResetDefaults();
     if(argos::NodeExists(t_node,"experiment_config")){
         ConfigLoader::Load(m_config,t_node);
+
         std::string mac_protocol = m_config.mac.protocol;
         argos::GetNodeAttributeOrDefault(t_node,"mac_protocol",mac_protocol,mac_protocol);
-        if(mac_protocol == "TDMA") {
-            argos::LOGERR
-                << "[CONFIG WARNING] TDMA is not currently "
-                << "implemented. Using CSMA instead."
-                << std::endl;
-            mac_protocol = "CSMA";
-        }
-        if(mac_protocol == "ALOHA") {
-            g_mac_layer.SetMode(MACMode::ALOHA);
-        }
-        else if(mac_protocol == "CSMA") {
-            g_mac_layer.SetMode(MACMode::CSMA);
-        }
+        if(mac_protocol == "ALOHA") g_mac_layer.SetMode(MACMode::ALOHA);
+        else if(mac_protocol == "CSMA") g_mac_layer.SetMode(MACMode::CSMA);
+        else if(mac_protocol == "TDMA") g_mac_layer.SetMode(MACMode::TDMA);
         else {
             argos::LOGERR
                 << "[CONFIG] Unsupported MAC protocol: "
@@ -47,8 +38,8 @@ void CSwarmLoopFunctions::Init(argos::TConfigurationNode& t_node) {
             mac_protocol = "CSMA";
             g_mac_layer.SetMode(MACMode::CSMA);
         }
+        m_config.mac.protocol = mac_protocol;
 
-        m_config.mac.protocol =mac_protocol;
         g_channel.SetNoiseSigma(m_config.channel.noise);
         g_channel.SetRange(m_config.channel.range);
         g_channel.SetAttenuation(m_config.channel.attenuation);
@@ -66,6 +57,37 @@ void CSwarmLoopFunctions::Init(argos::TConfigurationNode& t_node) {
         g_mac_layer.SetALOHAProbability(m_config.mac.aloha_probability);
         g_mac_layer.SetCSMABackoff(m_config.mac.csma_backoff);
         g_mac_layer.SetCSMARandomWindow(m_config.mac.csma_random_window);
+        const double minimum_tdma_guard = m_config.channel.range / m_config.channel.speed_sound;
+        const double tdma_guard_interval = std::max(m_config.mac.tdma_guard_interval,minimum_tdma_guard);
+        const double tdma_packet_bits = 8.0 * static_cast<double>(m_config.channel.packet_overhead_bytes + m_config.mac.tdma_payload_bytes);
+        const double tdma_transmission_time = tdma_packet_bits / m_config.channel.bitrate_bps;
+        g_mac_layer.ConfigureTDMA(tdma_transmission_time,tdma_guard_interval,m_config.simulation.timestep);
+        if(m_config.mac.protocol == "TDMA") {
+            const double estimated_frame_duration = g_mac_layer.GetTDMASlotDuration() *static_cast<double>(m_config.robots.number);
+            argos::LOG
+                << "[TDMA] transmission time = "
+                << g_mac_layer.GetTDMATransmissionTime()
+                << " s"
+                << std::endl;
+
+            argos::LOG
+                << "[TDMA] propagation guard = "
+                << g_mac_layer.GetTDMAGuardInterval()
+                << " s"
+                << std::endl;
+
+            argos::LOG
+                << "[TDMA] slot duration = "
+                << g_mac_layer.GetTDMASlotDuration()
+                << " s"
+                << std::endl;
+
+            argos::LOG
+                << "[TDMA] estimated frame duration = "
+                << estimated_frame_duration
+                << " s"
+                << std::endl;
+        }
         argos::LOG << "[CONFIG] Acoustic range = "
             << m_config.channel.range
             << std::endl;
@@ -113,6 +135,15 @@ void CSwarmLoopFunctions::Init(argos::TConfigurationNode& t_node) {
     << "\n";
     cfg<< "mac="
     << m_config.mac.protocol
+    << "\n";
+    cfg << "tdma_transmission_time="
+    << g_mac_layer.GetTDMATransmissionTime()
+    << "\n";
+    cfg << "tdma_guard_interval="
+    << g_mac_layer.GetTDMAGuardInterval()
+    << "\n";
+    cfg << "tdma_slot_duration="
+    << g_mac_layer.GetTDMASlotDuration()
     << "\n";
     cfg<< "localization="
     << m_config.localization.algorithm
@@ -206,6 +237,7 @@ void CSwarmLoopFunctions::Reset() {
     g_scheduler.Clear();
     g_event_bus.Clear();
     g_mac_layer.Reset();
+    m_tdma_pending_packets.clear();
     g_robot_truth_state.clear();
     g_robot_est_state.clear();
     g_robot_inboxes.clear();
@@ -231,7 +263,15 @@ void CSwarmLoopFunctions::PostStep() {
     //UPDATE GROUND TRUTH
     auto& space = GetSpace();
     auto& entities = space.GetEntitiesByType("foot-bot");
-
+    if(g_mac_layer.GetMode() == MACMode::TDMA){
+        std::vector<std::string> tdma_robot_ids;
+        tdma_robot_ids.reserve(entities.size());
+        for(const auto& entity : entities) {
+            tdma_robot_ids.push_back(entity.first);
+        }
+        // MACLayer sorts these identifiers. For generated IDs fb_0, fb_1, ... this produces a deterministic slot assignment.
+        g_mac_layer.SetTDMASenders(tdma_robot_ids);
+    }
     for(const auto& it : entities) {
         auto* fb = argos::any_cast<argos::CFootBotEntity*>(it.second);
         if(!fb) continue;
@@ -364,13 +404,29 @@ void CSwarmLoopFunctions::PostStep() {
     }
     // TX PIPELINE
     auto& outbox = g_message_bus.GetOutbox();
-    std::vector<Packet> transmitting_packets;
-    transmitting_packets.reserve(outbox.size());
+    std::vector<Packet> mac_candidates;
+    if(g_mac_layer.GetMode() == MACMode::TDMA){
+        // Keep only the newest localization packet from each sender while it waits for its slot.
+        for(const Packet& packet : outbox) {
+            m_tdma_pending_packets[packet.sender] = packet;
+        }
+        mac_candidates.reserve(m_tdma_pending_packets.size());
+        for(const auto& pending : m_tdma_pending_packets){
+            mac_candidates.push_back(pending.second);
+        }
+    }
+    else {
+        //Preserve the existing ALOHA and CSMA logic.
+        mac_candidates.assign(outbox.begin(),outbox.end());
+    }
+    std::vector<Packet>transmitting_packets;
+    transmitting_packets.reserve(mac_candidates.size());
     // Apply the configured MAC protocol first.
-    for(const Packet& packet : outbox) {
+    for(const Packet& packet : mac_candidates){
         if(!g_mac_layer.CanTransmit(packet.sender,sim_time))continue;
         g_mac_layer.OnTransmit(packet.sender,sim_time);
         transmitting_packets.push_back(packet);
+        if(g_mac_layer.GetMode() ==MACMode::TDMA) m_tdma_pending_packets.erase(packet.sender);
     }
     // Process only MAC-approved packets.
     for(const Packet& packet : transmitting_packets){
